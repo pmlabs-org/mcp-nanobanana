@@ -14,7 +14,7 @@
 - **Sessions return 404 for unknown `Mcp-Session-Id`.** Never silently remap a stale id to a new child session — it triggers reinitialize storms and corrupts client state. See `feedback_mcp_no_session_resurrection` in `pmtools/CLAUDE.md`.
 - **The OAuth proxy must be a transparent byte-pipe.** No `sessionMap`, no body buffering to retry on 404, no setting `Mcp-Session-Id` on responses the proxy originated. If `oauth-server.js` ever grows session state, revert to the last good version.
 - **Local edits here do not ship until they reach the droplet.** Push to `origin master`, then `ssh mcp-server "cd /opt/pmin-mcpinfrastructure/repos/mcp-nanobanana && git pull --ff-only && cd /opt/pmin-mcpinfrastructure && bash scripts/check-repos-sync.sh nanobanana && docker compose build nanobanana && docker compose up -d nanobanana"`. The on-droplet sync check blocks rebuild if the clone is dirty or diverged.
-- **1Password item names use dash, never pipe.** Credentials are under `Claude_Connector - Gemini (Nano Banana)` in the `Claude Code` vault. `op://` references don't support pipes.
+- **1Password item names use dash, never pipe.** Credentials are under `Claude_Remote_MCP - Gemini (Nano Banana)` in the `Claude Code` vault. `op://` references don't support pipes.
 
 ## Stateful or stateless?
 
@@ -24,9 +24,9 @@
 
 | 1P item | Field | Used by |
 |---|---|---|
-| `Claude_Connector - Gemini (Nano Banana)` | `API Key` | `GEMINI_API_KEY` — Python MCP calls `google-genai` SDK |
-| `Claude_Connector - Gemini (Nano Banana)` | `MCP Auth Token` | Bearer token checked by `oauth-server.js` |
-| `Claude_Connector - Gemini (Nano Banana)` | `OAuth Client Secret` | PKCE client_credentials + authorization_code grants |
+| `Claude_Remote_MCP - Gemini (Nano Banana)` | `API Key` | `GEMINI_API_KEY` — Python MCP calls `google-genai` SDK |
+| `Claude_Remote_MCP - Gemini (Nano Banana)` | `MCP Auth Token` | Bearer token checked by `oauth-server.js` |
+| `Claude_Remote_MCP - Gemini (Nano Banana)` | `OAuth Client Secret` | PKCE client_credentials + authorization_code grants |
 
 Real values live in `/opt/pmin-mcpinfrastructure/env/nanobanana.env` on the droplet.
 

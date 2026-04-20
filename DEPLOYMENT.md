@@ -7,7 +7,7 @@
 | **Internal port** | 8080 (Node OAuth proxy) → 127.0.0.1:8081 (Python FastMCP) |
 | **Volume** | `./data/nanobanana-images` → `/data/images` (`IMAGE_OUTPUT_DIR`) |
 | **Env file** | `/opt/pmin-mcpinfrastructure/env/nanobanana.env` |
-| **1P item** | `Claude_Connector - Gemini (Nano Banana)` (vault: `Claude Code`) |
+| **1P item** | `Claude_Remote_MCP - Gemini (Nano Banana)` (vault: `Claude Code`) |
 | **Runbook** | `/opt/pmin-mcpinfrastructure/docs/runbooks/nanobanana.md` |
 
 ## Rebuild / redeploy
@@ -43,6 +43,6 @@ Go to **claude.ai → Settings → Integrations → Add custom integration**:
 | **Name** | NanoBanana |
 | **Remote MCP Server URL** | https://nanobanana.mcp.pathfindermarketing.com.au/mcp |
 | **Client ID** | claude-pathfinder |
-| **Client Secret** | (1P: `Claude_Connector - Gemini (Nano Banana)` → `OAuth Client Secret`) |
+| **Client Secret** | (1P: `Claude_Remote_MCP - Gemini (Nano Banana)` → `OAuth Client Secret`) |
 
 Complete the PKCE flow in the browser window that opens.
