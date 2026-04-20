@@ -12,7 +12,7 @@ from pydantic import Field
 from ..config.constants import MAX_INPUT_IMAGES
 from ..config.settings import ModelTier, ThinkingLevel
 from ..core.exceptions import ValidationError
-from ..utils.validation_utils import validate_output_path
+from ..utils.validation_utils import ensure_inside_image_root, validate_output_path
 
 
 def register_generate_image_tool(server: FastMCP):
@@ -21,7 +21,7 @@ def register_generate_image_tool(server: FastMCP):
     @server.tool(
         annotations={
             "title": "Generate or edit images (Multi-Model: Flash & Pro)",
-            "readOnlyHint": True,
+            "readOnlyHint": False,
             "openWorldHint": True,
         }
     )
@@ -220,8 +220,11 @@ def register_generate_image_tool(server: FastMCP):
                 if len(input_image_paths) > MAX_INPUT_IMAGES:
                     raise ValidationError(f"Maximum {MAX_INPUT_IMAGES} input images allowed")
 
-                # Validate that all files exist
+                # Pathfinder fork: clamp every caller-supplied path to IMAGE_OUTPUT_DIR
+                # before the existence check so authenticated MCP clients cannot read
+                # arbitrary container-visible files.
                 for i, path in enumerate(input_image_paths):
+                    ensure_inside_image_root(path)
                     if not os.path.exists(path):
                         raise ValidationError(f"Input image {i + 1} not found: {path}")
                     if not os.path.isfile(path):

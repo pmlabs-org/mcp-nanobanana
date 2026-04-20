@@ -329,6 +329,55 @@ def resolve_output_path(
     return str(resolved)
 
 
+def _get_image_io_root() -> Optional[Path]:
+    """Return the configured image I/O root, or None if not set.
+
+    Pathfinder fork: when the operator sets IMAGE_OUTPUT_DIR (always set in our
+    Docker deployment), every caller-supplied file path must resolve inside that
+    directory. This turns the blocklist below into an allowlist and prevents
+    authenticated MCP clients from reading arbitrary files the container can
+    see, or writing binary data to arbitrary writable paths in the container.
+    """
+    raw = os.getenv("IMAGE_OUTPUT_DIR", "").strip()
+    if not raw:
+        return None
+    return Path(os.path.expanduser(raw)).resolve()
+
+
+def ensure_inside_image_root(path: str) -> str:
+    """Clamp caller-supplied paths to the image I/O root.
+
+    Pathfinder fork: added 2026-04-20 to close file-system overreach findings
+    from the deploy-time security review. When IMAGE_OUTPUT_DIR is set, any
+    path resolving outside that root is rejected. When unset (local dev),
+    falls back to the legacy system-dir blocklist for backwards compatibility.
+
+    Returns the resolved absolute path on success.
+    """
+    if not path or not path.strip():
+        raise ValidationError("Path cannot be empty")
+
+    resolved = Path(os.path.expanduser(path)).resolve()
+    root = _get_image_io_root()
+
+    if root is not None:
+        try:
+            inside = resolved.is_relative_to(root)
+        except AttributeError:
+            inside = os.path.commonpath([str(resolved), str(root)]) == str(root)
+        if not inside:
+            raise ValidationError(
+                f"Path must be inside IMAGE_OUTPUT_DIR ({root}); got {resolved}"
+            )
+    else:
+        path_str = str(resolved).lower()
+        for bad in ("/bin", "/sbin", "/usr/bin", "/usr/sbin", "/etc", "/var/log"):
+            if path_str.startswith(bad):
+                raise ValidationError(f"Cannot access system directory: {bad}")
+
+    return str(resolved)
+
+
 def validate_output_path(output_path: str | None) -> None:
     """
     Validate output path for basic issues.
@@ -346,28 +395,4 @@ def validate_output_path(output_path: str | None) -> None:
     if not output_path.strip():
         raise ValidationError("output_path cannot be an empty string")
 
-    # Expand and resolve the path
-    expanded = os.path.expanduser(output_path)
-    resolved = Path(expanded).resolve()
-
-    # Check if parent directory exists or can be created
-    # We don't create it here, just validate it's not impossible
-    parent = resolved.parent
-    if not parent.exists():
-        # Check if any ancestor exists (to verify the path is valid)
-        current = parent
-        while current != current.parent:  # Stop at root
-            if current.exists():
-                break
-            current = current.parent
-        else:
-            # We got to root without finding an existing ancestor
-            # This is actually fine - we'll create the directories
-            pass
-
-    # Check for obviously problematic paths
-    path_str = str(resolved).lower()
-    dangerous_paths = ["/bin", "/sbin", "/usr/bin", "/usr/sbin", "/etc", "/var/log"]
-    for dangerous in dangerous_paths:
-        if path_str.startswith(dangerous):
-            raise ValidationError(f"Cannot write to system directory: {dangerous}")
+    ensure_inside_image_root(output_path)

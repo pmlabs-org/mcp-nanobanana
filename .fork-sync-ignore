@@ -1,0 +1,33 @@
+# Fork-sync ignore list for PM-Labs/mcp-nanobanana
+#
+# Format: one upstream commit SHA per line, with a comment on the line above
+# explaining why it is permanently rejected. See pmin-mcpinfrastructure
+# CLAUDE.md §"Rejecting upstream commits" for the format.
+#
+# The weekly sync cron (scripts/sync.sh on the droplet) cherry-picks new
+# upstream commits; any SHA listed here is skipped permanently.
+#
+# Additions are welcome — remove entries only when the security concern no
+# longer applies. Do NOT remove without re-running the deploy-time review.
+#
+# -----------------------------------------------------------------------------
+# Current policy: Pathfinder patches that tighten file-system overreach MUST
+# survive fork-sync. The following local changes are NOT commits-to-ignore
+# (they are ours, not upstream's), but documenting them here so the next
+# operator understands the intent when resolving future cherry-pick conflicts.
+#
+# Local patches on top of upstream (2026-04-20 deploy-time security review):
+#   1. utils/validation_utils.py  — added ensure_inside_image_root() clamp;
+#      validate_output_path() now delegates to it.
+#   2. tools/generate_image.py    — clamped every input_image_path_* read to
+#      IMAGE_OUTPUT_DIR; flipped readOnlyHint False (the tool writes files).
+#   3. tests/test_path_security.py — regression test for the clamp.
+#
+# If an upstream commit touches any of the lines above and conflicts:
+#   - Resolve the conflict by KEEPING the clamp behavior (ours), not by
+#     reverting to upstream's coarse blocklist or removing readOnlyHint=False.
+#   - Do NOT add the upstream commit SHA to this file — just resolve and
+#     commit the merge.
+# -----------------------------------------------------------------------------
+
+# (No upstream SHAs currently rejected.)
