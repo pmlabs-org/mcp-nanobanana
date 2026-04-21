@@ -23,6 +23,12 @@
 #      IMAGE_OUTPUT_DIR; flipped readOnlyHint False (the tool writes files).
 #   3. tests/test_path_security.py — regression test for the clamp.
 #
+# Local patches added 2026-04-21:
+#   4. tools/generate_image.py    — carve-out in the outer except that catches
+#      429 RESOURCE_EXHAUSTED / FreeTier quota errors and surfaces an explicit,
+#      actionable message to the MCP client instead of being swallowed by
+#      FASTMCP_MASK_ERRORS. Without this, quota/billing issues are invisible.
+#
 # If an upstream commit touches any of the lines above and conflicts:
 #   - Resolve the conflict by KEEPING the clamp behavior (ours), not by
 #     reverting to upstream's coarse blocklist or removing readOnlyHint=False.

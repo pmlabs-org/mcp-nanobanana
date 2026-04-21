@@ -622,6 +622,46 @@ def register_generate_image_tool(server: FastMCP):
             logger.error(f"Validation error in generate_image: {e}")
             raise
         except Exception as e:
+            # Pathfinder fork: carve-out for 429 RESOURCE_EXHAUSTED — the error mask
+            # would otherwise hide the root cause from the MCP client, leaving the
+            # Design team staring at "❌ No images were generated" with no clue it's
+            # a billing/quota issue. Surface an explicit, actionable message.
+            err_text = str(e)
+            err_status = getattr(e, "status_code", None) or getattr(e, "code", None)
+            is_quota = (
+                err_status == 429
+                or "RESOURCE_EXHAUSTED" in err_text
+                or "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" in err_text
+                or "GenerateRequestsPerDayPerProjectPerModel-FreeTier" in err_text
+            )
+            if is_quota:
+                logger.error(f"Gemini quota/billing error in generate_image: {e}")
+                hint_lines = [
+                    "⚠️ **Gemini API quota / billing issue — image not generated.**",
+                    "",
+                    "This is usually one of:",
+                    "• The GCP project behind the configured API key does not have billing enabled.",
+                    "• The API key was generated *before* billing was linked — Google caches the key's",
+                    "  classification at creation time. Fix: link billing, then generate a **new** key.",
+                    "• Temporary rate-limit — retry in ~30s.",
+                    "",
+                    "Diagnostics:",
+                    "• Run a direct curl against `generativelanguage.googleapis.com` with the key",
+                    "  (header `x-goog-api-key`) to isolate key vs MCP plumbing.",
+                    "• Check GCP Console → Billing for the project tied to `GEMINI_API_KEY`.",
+                    "• Check the droplet container actually has the new key after env rotation:",
+                    "  `docker exec <container> sh -c 'env | grep GEMINI_API_KEY'` — `docker compose",
+                    "  restart` does NOT reload env_file; use `up -d --force-recreate`.",
+                ]
+                return ToolResult(
+                    content=[TextContent(type="text", text="\n".join(hint_lines))],
+                    structured_content={
+                        "error": "quota_exhausted",
+                        "status": 429,
+                        "message": "Gemini API quota/billing issue — see text block for remediation steps.",
+                        "raw": err_text[:600],
+                    },
+                )
             logger.error(f"Unexpected error in generate_image: {e}")
             raise
 
