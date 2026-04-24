@@ -260,35 +260,44 @@ const server = http.createServer(async (req, res) => {
 // Start Python FastMCP on internal port
 // ---------------------------------------------------------------------------
 
-const mcpProcess = spawn('python', ['-m', 'nanobanana_mcp_server.server'], {
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    FASTMCP_TRANSPORT: 'http',
-    FASTMCP_HOST: '127.0.0.1',
-    FASTMCP_PORT: String(INTERNAL_PORT),
-  },
-});
+function startMcpChild() {
+  const mcpProcess = spawn('python', ['-m', 'nanobanana_mcp_server.server'], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      FASTMCP_TRANSPORT: 'http',
+      FASTMCP_HOST: '127.0.0.1',
+      FASTMCP_PORT: String(INTERNAL_PORT),
+    },
+  });
 
-mcpProcess.on('exit', (code) => {
-  console.error(`nanobanana-mcp exited with code ${code}`);
-  process.exit(code ?? 1);
-});
+  mcpProcess.on('exit', (code) => {
+    console.error(`nanobanana-mcp exited with code ${code}`);
+    process.exit(code ?? 1);
+  });
 
-process.on('SIGTERM', () => {
-  mcpProcess.kill('SIGTERM');
-  server.close(() => process.exit(0));
-});
+  process.on('SIGTERM', () => {
+    mcpProcess.kill('SIGTERM');
+    server.close(() => process.exit(0));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Start proxy after MCP is ready
 // ---------------------------------------------------------------------------
 
-waitForMcp().then(() => {
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`OAuth proxy listening on port ${PORT} → nanobanana-mcp on port ${INTERNAL_PORT}`);
+if (process.env.NODE_TEST !== '1') {
+  startMcpChild();
+  waitForMcp().then(() => {
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`OAuth proxy listening on port ${PORT} → nanobanana-mcp on port ${INTERNAL_PORT}`);
+    });
+  }).catch((err) => {
+    console.error('Failed to start:', err);
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error('Failed to start:', err);
-  process.exit(1);
-});
+}
+
+module.exports = {
+  requestHandler: server.listeners('request')[0],
+};
