@@ -29,6 +29,8 @@ const http = require('http');
 const { createHash, randomUUID } = require('crypto');
 const { spawn } = require('child_process');
 const { URLSearchParams } = require('url');
+const fs = require('node:fs');
+const fsPath = require('node:path');
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const INTERNAL_PORT = 8081;
@@ -36,6 +38,8 @@ const AUTH_TOKEN = (process.env.MCP_AUTH_TOKEN || '').trim();
 const OAUTH_CLIENT_ID = (process.env.OAUTH_CLIENT_ID || 'claude-pathfinder').trim();
 const OAUTH_CLIENT_SECRET = (process.env.OAUTH_CLIENT_SECRET || '').trim();
 const TOKEN_TTL_SECONDS = 2592000;
+const IMAGE_OUTPUT_DIR = (process.env.IMAGE_OUTPUT_DIR || '/data/images').trim();
+const UUID_V4_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** @type {Record<string, {codeChallenge:string, codeChallengeMethod:string, redirectUri:string, expiresAt:number}>} */
 const authCodes = {};
@@ -119,6 +123,27 @@ function proxyRequest(req, res) {
     else res.destroy();
   });
   req.pipe(proxy, { end: true });
+}
+
+function serveImage(req, res, pathname) {
+  // Expected shape: /images/<uuid>.png
+  const match = pathname.match(/^\/images\/([^/]+)\.png$/);
+  if (!match) { json(res, 400, { error: 'bad_request' }); return; }
+  const id = match[1];
+  if (!UUID_V4_RX.test(id)) { json(res, 400, { error: 'invalid_id' }); return; }
+
+  const root = fsPath.resolve(IMAGE_OUTPUT_DIR);
+  const filePath = fsPath.resolve(root, 'temp_images', `${id}.png`);
+  if (filePath !== fsPath.join(root, 'temp_images', `${id}.png`)) {
+    // Defensive belt-and-braces clamp. resolve() should never produce a path
+    // outside root for a regex-validated id, but keep the explicit check.
+    json(res, 403, { error: 'forbidden' });
+    return;
+  }
+  if (!fs.existsSync(filePath)) { json(res, 404, { error: 'not_found' }); return; }
+
+  res.writeHead(200, { 'Content-Type': 'image/png' });
+  fs.createReadStream(filePath).pipe(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +271,12 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'Unauthorized' }));
         return;
       }
+    }
+
+    // Image download route (bearer-authed, GET-only)
+    if (path.startsWith('/images/') && req.method === 'GET') {
+      serveImage(req, res, path);
+      return;
     }
 
     // Transparent proxy (pipes SSE through as-is)
