@@ -587,6 +587,7 @@ def register_generate_image_tool(server: FastMCP):
                     for m in metadata
                     if m and isinstance(m, dict) and m.get("full_path")
                 ],
+                "download_urls": _build_download_urls(metadata),
                 "files_api_ids": [
                     m.get("files_api", {}).get("name")
                     for m in metadata
@@ -671,3 +672,23 @@ def _get_enhanced_image_service():
     from ..services import get_enhanced_image_service
 
     return get_enhanced_image_service()
+
+
+def _build_download_urls(metadata: list) -> list[str]:
+    """Build public download URLs for each successfully-stored image.
+
+    Reads NANOBANANA_PUBLIC_URL (e.g. "https://nanobanana.mcp.pathfindermarketing.com.au")
+    and appends /images/<storage_id>.png. Returns [] if env var is unset so
+    clients can detect "server not configured for public downloads" cleanly.
+    """
+    base = os.getenv("NANOBANANA_PUBLIC_URL", "").strip().rstrip("/")
+    if not base:
+        return []
+    urls = []
+    for m in metadata or []:
+        if not m or not isinstance(m, dict):
+            continue
+        sid = m.get("storage_id")
+        if sid:
+            urls.append(f"{base}/images/{sid}.png")
+    return urls
