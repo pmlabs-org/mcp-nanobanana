@@ -98,3 +98,18 @@ test('GET /images/:id.png — directory at the expected file path → 404 (not 5
 
   assert.equal(r.statusCode, 404);
 });
+
+test('GET /images/:id.png — missing Authorization header → 401', async () => {
+  const uuid = '11111111-2222-3333-4444-555555555555';
+  const r = await invoke({ url: `/images/${uuid}.png` });
+  assert.equal(r.statusCode, 401);
+});
+
+test('GET /images/:id.png — wrong bearer token → 401', async () => {
+  const uuid = '11111111-2222-3333-4444-555555555555';
+  const r = await invoke({
+    url: `/images/${uuid}.png`,
+    headers: { authorization: 'Bearer wrong' },
+  });
+  assert.equal(r.statusCode, 401);
+});
