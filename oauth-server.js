@@ -291,7 +291,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Image download route (bearer-authed, GET-only)
-    if (path.startsWith('/images/') && req.method === 'GET') {
+    if (path.startsWith('/images/')) {
+      if (req.method !== 'GET') { json(res, 405, { error: 'method_not_allowed' }); return; }
       serveImage(req, res, path);
       return;
     }

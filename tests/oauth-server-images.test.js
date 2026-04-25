@@ -146,3 +146,13 @@ test('GET /images/some-uuid/extra.png — extra path segments → 400', async ()
   });
   assert.equal(r.statusCode, 400);
 });
+
+test('POST /images/:id.png — method not allowed (handler refuses non-GET) → 405', async () => {
+  const uuid = '11111111-2222-3333-4444-555555555555';
+  const r = await invoke({
+    method: 'POST',
+    url: `/images/${uuid}.png`,
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+  assert.equal(r.statusCode, 405);
+});
