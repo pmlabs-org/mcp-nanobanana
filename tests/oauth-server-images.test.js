@@ -71,3 +71,30 @@ test('GET /images/:id.png — valid bearer + valid UUID + file exists → 200 im
   assert.equal(r.headers['content-type'], 'image/png');
   assert.deepEqual(r.body, pngBytes);
 });
+
+test('GET /images/:id.png — response includes Content-Length equal to body size', async () => {
+  const uuid = '22222222-3333-4444-5555-666666666666';
+  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xde, 0xad, 0xbe, 0xef]);
+  fs.writeFileSync(path.join(tmpRoot, 'temp_images', `${uuid}.png`), pngBytes);
+
+  const r = await invoke({
+    url: `/images/${uuid}.png`,
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.headers['content-length'], String(pngBytes.length));
+  assert.deepEqual(r.body, pngBytes);
+});
+
+test('GET /images/:id.png — directory at the expected file path → 404 (not 500)', async () => {
+  const uuid = '33333333-4444-5555-6666-777777777777';
+  fs.mkdirSync(path.join(tmpRoot, 'temp_images', `${uuid}.png`), { recursive: true });
+
+  const r = await invoke({
+    url: `/images/${uuid}.png`,
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+
+  assert.equal(r.statusCode, 404);
+});

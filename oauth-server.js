@@ -140,10 +140,27 @@ function serveImage(req, res, pathname) {
     json(res, 403, { error: 'forbidden' });
     return;
   }
-  if (!fs.existsSync(filePath)) { json(res, 404, { error: 'not_found' }); return; }
+  let stats;
+  try {
+    stats = fs.statSync(filePath);
+  } catch (err) {
+    if (err.code === 'ENOENT') { json(res, 404, { error: 'not_found' }); return; }
+    console.error('image stat error:', err.message);
+    json(res, 500, { error: 'internal_error' });
+    return;
+  }
+  if (!stats.isFile()) { json(res, 404, { error: 'not_found' }); return; }
 
-  res.writeHead(200, { 'Content-Type': 'image/png' });
-  fs.createReadStream(filePath).pipe(res);
+  res.writeHead(200, {
+    'Content-Type': 'image/png',
+    'Content-Length': stats.size,
+  });
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', (err) => {
+    console.error('image stream error:', err.message);
+    res.destroy();
+  });
+  stream.pipe(res);
 }
 
 // ---------------------------------------------------------------------------
