@@ -113,3 +113,36 @@ test('GET /images/:id.png — wrong bearer token → 401', async () => {
   });
   assert.equal(r.statusCode, 401);
 });
+
+test('GET /images/:id.png — malformed UUID → 400', async () => {
+  const r = await invoke({
+    url: '/images/not-a-uuid.png',
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+  assert.equal(r.statusCode, 400);
+});
+
+test('GET /images/:id.png — well-formed UUID but no file → 404', async () => {
+  const uuid = 'deadbeef-dead-beef-dead-beefdeadbeef';
+  const r = await invoke({
+    url: `/images/${uuid}.png`,
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+  assert.equal(r.statusCode, 404);
+});
+
+test('GET /images/..%2Fetc%2Fpasswd.png — URL-encoded traversal → 400 (regex rejects)', async () => {
+  const r = await invoke({
+    url: '/images/..%2Fetc%2Fpasswd.png',
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+  assert.equal(r.statusCode, 400);
+});
+
+test('GET /images/some-uuid/extra.png — extra path segments → 400', async () => {
+  const r = await invoke({
+    url: '/images/11111111-2222-3333-4444-555555555555/extra.png',
+    headers: { authorization: 'Bearer test-bearer' },
+  });
+  assert.equal(r.statusCode, 400);
+});
