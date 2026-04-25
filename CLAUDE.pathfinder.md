@@ -55,6 +55,29 @@ Weekly cherry-pick auto-sync via `/opt/pmin-mcpinfrastructure/scripts/sync.sh` (
 | `MCP_AUTH_TOKEN` | (from 1P) | Bearer token claude.ai sends |
 | `OAUTH_CLIENT_ID` | `claude-pathfinder` | Shared across all Pathfinder MCPs |
 | `OAUTH_CLIENT_SECRET` | (from 1P) | Shared with claude.ai Integrations config |
+| `NANOBANANA_PUBLIC_URL` | `https://nanobanana.mcp.pathfindermarketing.com.au` | Base URL used by `generate_image` to build `download_urls[]`. Leave unset to disable the local-download hint. |
+
+## Local download route (Pathfinder fork, 2026-04-24)
+
+`oauth-server.js` exposes `GET /images/:storage_id.png` (bearer-authed,
+GET-only, UUID-v4 validated, path-clamped inside `IMAGE_OUTPUT_DIR`).
+`generate_image` emits `download_urls[]` in `structured_content` when
+`NANOBANANA_PUBLIC_URL` is set.
+
+Client pattern (Claude):
+
+```bash
+source /tmp/pm-op-cache.env   # warm bearer token
+curl -fSL \
+  -H "Authorization: Bearer $NANOBANANA_MCP_AUTH_TOKEN" \
+  -o "$HOME/nanobanana-images/<ts>-<slug>-<short-uuid>.png" \
+  "$DOWNLOAD_URL"
+```
+
+Run all sidecar tests: `node --test tests/*.test.js`
+
+Design spec: `docs/superpowers/specs/2026-04-24-nanobanana-local-download-design.md`
+(in the workspace repo).
 
 ## Related
 
