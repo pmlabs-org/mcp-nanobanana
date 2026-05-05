@@ -13,7 +13,7 @@
 
 - **Sessions return 404 for unknown `Mcp-Session-Id`.** Never silently remap a stale id to a new child session — it triggers reinitialize storms and corrupts client state. See `feedback_mcp_no_session_resurrection` in `pmtools/CLAUDE.md`.
 - **The OAuth proxy must be a transparent byte-pipe.** No `sessionMap`, no body buffering to retry on 404, no setting `Mcp-Session-Id` on responses the proxy originated. If `oauth-server.js` ever grows session state, revert to the last good version.
-- **Local edits here do not ship until they reach the droplet.** Push to `origin master`, then `ssh mcp-server "cd /opt/pmin-mcpinfrastructure/repos/mcp-nanobanana && git pull --ff-only && cd /opt/pmin-mcpinfrastructure && bash scripts/check-repos-sync.sh nanobanana && docker compose build nanobanana && docker compose up -d nanobanana"`. The on-droplet sync check blocks rebuild if the clone is dirty or diverged.
+- **Local edits here do not ship until CI builds and deploys.** Push to `origin master` → GitHub Actions builds the Docker image, pushes to `ghcr.io/pmlabs-org/mcp-nanobanana:latest`, then SSHes to the droplet to pull and recreate the container. See `.github/workflows/ci.yaml`.
 - **1Password item names use dash, never pipe.** Credentials are under `Claude_Remote_MCP - Gemini (Nano Banana)` in the `Claude Code` vault. `op://` references don't support pipes.
 
 ## Stateful or stateless?
@@ -32,9 +32,11 @@ Real values live in `/opt/pmin-mcpinfrastructure/env/nanobanana.env` on the drop
 
 ## Deploy
 
-Edit here → push origin → on droplet:
+Push to `origin master` — CI handles the rest (build → GHCR push → droplet pull → recreate).
+
+For a manual deploy bypass (no code change needed):
 ```bash
-ssh mcp-server "cd /opt/pmin-mcpinfrastructure/repos/mcp-nanobanana && git pull --ff-only && cd /opt/pmin-mcpinfrastructure && bash scripts/check-repos-sync.sh nanobanana && docker compose build nanobanana && docker compose up -d nanobanana"
+ssh mcp-server "cd /opt/pmin-mcpinfrastructure && docker compose pull nanobanana && docker compose up -d --force-recreate nanobanana"
 ```
 
 ## Upstream & fork-sync
