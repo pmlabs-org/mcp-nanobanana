@@ -91,11 +91,9 @@ jobs:
       - name: Deploy to droplet
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "echo '${{ secrets.GHCR_TOKEN }}' | docker login ghcr.io -u 'PM-Labs' --password-stdin \
-            && cd /opt/pmin-mcpinfrastructure \
+            "cd /opt/pmin-mcpinfrastructure \
             && docker compose pull nanobanana \
-            && docker compose up -d --force-recreate nanobanana \
-            && docker logout ghcr.io"
+            && docker compose up -d --force-recreate nanobanana"
 
       - name: Health check
         run: |
