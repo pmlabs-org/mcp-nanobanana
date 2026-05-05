@@ -10,11 +10,41 @@
 | **1P item** | `Claude_Remote_MCP - Gemini (Nano Banana)` (vault: `Claude Code`) |
 | **Runbook** | `/opt/pmin-mcpinfrastructure/docs/runbooks/nanobanana.md` |
 
-## Rebuild / redeploy
+## CI/CD (normal deploy path)
+
+Push to `master` → GitHub Actions runs automatically:
+
+1. **test** job — ruff lint/format, pytest, node --test
+2. **deploy** job (only on master push, after test passes):
+   - Builds Docker image and pushes to `ghcr.io/pmlabs-org/mcp-nanobanana:latest` (and `:$SHA`)
+   - Previous `latest` is re-tagged as `:previous` for rollback
+   - SSHes to droplet → `docker compose pull nanobanana && docker compose up -d --force-recreate nanobanana`
+   - Health-checks `/.well-known/oauth-authorization-server` (5 retries × 15s)
+
+**Required GitHub Actions secrets** (set on `pmlabs-org/mcp-nanobanana`):
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_HOST` | `mcp-server` |
+| `DEPLOY_USER` | `root` |
+| `DEPLOY_SSH_KEY` | Contents of `~/.ssh/do_mcp_server` |
+| `GHCR_TOKEN` | 1P: `Claude_Connector - GHCR (pmlabs-org)` → `token` |
+
+## Manual redeploy (bypass CI)
 
 ```bash
-# Push your changes to origin first, then:
-ssh mcp-server "cd /opt/pmin-mcpinfrastructure/repos/mcp-nanobanana && git pull --ff-only && cd /opt/pmin-mcpinfrastructure && bash scripts/check-repos-sync.sh nanobanana && docker compose build nanobanana && docker compose up -d nanobanana"
+ssh mcp-server "cd /opt/pmin-mcpinfrastructure \
+  && docker compose pull nanobanana \
+  && docker compose up -d --force-recreate nanobanana"
+```
+
+## Rollback
+
+```bash
+ssh mcp-server "cd /opt/pmin-mcpinfrastructure \
+  && docker compose stop nanobanana \
+  && docker tag ghcr.io/pmlabs-org/mcp-nanobanana:previous ghcr.io/pmlabs-org/mcp-nanobanana:latest \
+  && docker compose up -d nanobanana"
 ```
 
 ## Post-deploy verification
