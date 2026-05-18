@@ -70,7 +70,10 @@ class TestGeminiClientAuth:
         # Access client property to trigger initialization
         _ = client.client
 
-        mock_client_cls.assert_called_with(api_key="test-key")
+        mock_client_cls.assert_called_with(
+            api_key="test-key",
+            http_options={"timeout": 60000},
+        )
 
     @patch("google.genai.Client")
     def test_vertex_ai_client_creation(self, mock_client_cls):
@@ -88,7 +91,10 @@ class TestGeminiClientAuth:
         _ = client.client
 
         mock_client_cls.assert_called_with(
-            vertexai=True, project="test-project", location="us-central1"
+            vertexai=True,
+            project="test-project",
+            location="us-central1",
+            http_options={"timeout": 60000},
         )
 
     @patch("google.genai.Client")
@@ -107,6 +113,9 @@ class TestGeminiClientAuth:
 
         mock_client_cls.assert_called_with(
             api_key="test-key",
-            http_options={"base_url": "https://proxy.example.com/v1beta?token=secret"},
+            http_options={
+                "base_url": "https://proxy.example.com/v1beta?token=secret",
+                "timeout": 60000,
+            },
         )
         client.logger.info.assert_any_call("Using custom base URL: https://proxy.example.com")
