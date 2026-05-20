@@ -20,7 +20,7 @@
  *   - Adapted from PM-Labs/mcp-playwright@1d75780 (clean byte-pipe, no session
  *     resurrection). Do NOT reintroduce the sessionMap / session-resurrection
  *     pattern — see feedback_mcp_no_session_resurrection in the main CLAUDE.md.
- *   - expires_in is 2592000 (30 days), not 86400 (24h). Anthropic's MCP proxy
+ *   - expires_in is 7776000 (90 days), not 86400 (24h). Anthropic's MCP proxy
  *     caches tokens and the integration shows "disconnected" after expiry.
  */
 'use strict';
@@ -37,12 +37,29 @@ const INTERNAL_PORT = 8081;
 const AUTH_TOKEN = (process.env.MCP_AUTH_TOKEN || '').trim();
 const OAUTH_CLIENT_ID = (process.env.OAUTH_CLIENT_ID || 'claude-pathfinder').trim();
 const OAUTH_CLIENT_SECRET = (process.env.OAUTH_CLIENT_SECRET || '').trim();
-const TOKEN_TTL_SECONDS = 2592000;
+const TOKEN_TTL_SECONDS = 7776000;
 const IMAGE_OUTPUT_DIR = (process.env.IMAGE_OUTPUT_DIR || '/data/images').trim();
 const UUID_V4_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** @type {Record<string, {codeChallenge:string, codeChallengeMethod:string, redirectUri:string, expiresAt:number}>} */
 const authCodes = {};
+
+// Token issuance tracking — persisted so the expiry-warning cron can read it.
+const TOKEN_META_PATH = '/tmp/mcp-token-meta.json';
+let tokenIssuedAt = null;
+try {
+  const meta = JSON.parse(fs.readFileSync(TOKEN_META_PATH, 'utf8'));
+  if (meta.issued_at) tokenIssuedAt = meta.issued_at;
+} catch { /* no prior issuance on record */ }
+
+function recordTokenIssuance() {
+  tokenIssuedAt = Math.floor(Date.now() / 1000);
+  try {
+    fs.writeFileSync(TOKEN_META_PATH, JSON.stringify({ issued_at: tokenIssuedAt, expires_in: TOKEN_TTL_SECONDS }));
+  } catch (err) {
+    console.error('Failed to write token meta:', err.message);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -245,6 +262,7 @@ const server = http.createServer(async (req, res) => {
         if (expected !== stored.codeChallenge) { json(res, 400, { error: 'invalid_grant' }); return; }
         if (redirect_uri && redirect_uri !== stored.redirectUri) { json(res, 400, { error: 'invalid_grant' }); return; }
         delete authCodes[code];
+        recordTokenIssuance();
         json(res, 200, { access_token: AUTH_TOKEN, token_type: 'Bearer', expires_in: TOKEN_TTL_SECONDS });
         return;
       }
@@ -267,7 +285,19 @@ const server = http.createServer(async (req, res) => {
         json(res, 401, { error: 'invalid_client' });
         return;
       }
+      recordTokenIssuance();
       json(res, 200, { access_token: AUTH_TOKEN, token_type: 'Bearer', expires_in: TOKEN_TTL_SECONDS });
+      return;
+    }
+
+    // Token expiry metadata (unauthenticated — reveals only a timestamp)
+    if (path === '/.well-known/token-expiry' && req.method === 'GET') {
+      if (tokenIssuedAt === null) { json(res, 404, { error: 'no_token_issued' }); return; }
+      json(res, 200, {
+        issued_at: tokenIssuedAt,
+        expires_in: TOKEN_TTL_SECONDS,
+        expires_at: tokenIssuedAt + TOKEN_TTL_SECONDS,
+      });
       return;
     }
 
