@@ -35,19 +35,25 @@ class GeminiClient:
     def client(self) -> genai.Client:
         """Lazy initialization of Gemini client."""
         if self._client is None:
-            # Build http_options for custom base URL if configured
-            http_options = None
+            http_options = {}
             if self.config.gemini_base_url:
-                http_options = {"base_url": self.config.gemini_base_url}
+                http_options["base_url"] = self.config.gemini_base_url
                 safe_url = self._get_safe_base_url_for_log(self.config.gemini_base_url)
                 self.logger.info(f"Using custom base URL: {safe_url}")
+
+            # Set request timeout (in milliseconds) to prevent indefinite hangs.
+            # Without this, httpx receives timeout=None which disables timeouts entirely.
+            timeout_seconds = getattr(self.gemini_config, "request_timeout", 60)
+            http_options["timeout"] = timeout_seconds * 1000
+            self.logger.debug(f"Request timeout: {timeout_seconds}s")
 
             if self.config.auth_method == AuthMethod.API_KEY:
                 if not self.config.gemini_api_key:
                     raise AuthenticationError("API key is required for API_KEY auth method")
-                client_kwargs = {"api_key": self.config.gemini_api_key}
-                if http_options:
-                    client_kwargs["http_options"] = http_options
+                client_kwargs = {
+                    "api_key": self.config.gemini_api_key,
+                    "http_options": http_options,
+                }
                 self._client = genai.Client(**client_kwargs)
                 self._log_auth_method("API Key (Developer API)")
             else:  # VERTEX_AI
@@ -55,9 +61,8 @@ class GeminiClient:
                     "vertexai": True,
                     "project": self.config.gcp_project_id,
                     "location": self.config.gcp_region,
+                    "http_options": http_options,
                 }
-                if http_options:
-                    client_kwargs["http_options"] = http_options
                 self._client = genai.Client(**client_kwargs)
                 self._log_auth_method(f"ADC (Vertex AI - {self.config.gcp_region})")
         return self._client
