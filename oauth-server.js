@@ -181,6 +181,67 @@ function serveImage(req, res, pathname) {
 }
 
 // ---------------------------------------------------------------------------
+// Image upload route
+// ---------------------------------------------------------------------------
+
+const UPLOAD_MIME_TO_EXT = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const UPLOAD_MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+
+async function handleUpload(req, res) {
+  const contentType = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const ext = UPLOAD_MIME_TO_EXT[contentType];
+  if (!ext) {
+    json(res, 415, { error: 'unsupported_media_type', message: 'Content-Type must be image/jpeg, image/png, image/webp, or image/gif' });
+    return;
+  }
+
+  const chunks = [];
+  let received = 0;
+  let tooLarge = false;
+
+  await new Promise((resolve, reject) => {
+    req.on('data', (chunk) => {
+      received += chunk.length;
+      if (received > UPLOAD_MAX_BYTES) {
+        tooLarge = true;
+        // Don't push any more chunks but keep draining so the response can be sent cleanly
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', resolve);
+    req.on('error', reject);
+  });
+
+  if (tooLarge) {
+    if (!res.headersSent) json(res, 413, { error: 'payload_too_large', message: 'Maximum upload size is 20MB' });
+    return;
+  }
+
+  const imageBytes = Buffer.concat(chunks);
+  const uuid = randomUUID();
+  const uploadsDir = fsPath.join(fsPath.resolve(IMAGE_OUTPUT_DIR), 'uploads');
+  let filePath;
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    filePath = fsPath.join(uploadsDir, `${uuid}${ext}`);
+    fs.writeFileSync(filePath, imageBytes);
+  } catch (err) {
+    console.error('[UPLOAD] write error:', err.message);
+    if (!res.headersSent) json(res, 500, { error: 'internal_error', message: 'Failed to save uploaded file' });
+    return;
+  }
+
+  console.log(`[UPLOAD] ${imageBytes.length} bytes → ${filePath}`);
+  json(res, 200, { server_path: filePath, uuid });
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server
 // ---------------------------------------------------------------------------
 
@@ -324,6 +385,13 @@ const server = http.createServer(async (req, res) => {
     if (path.startsWith('/images/')) {
       if (req.method !== 'GET') { json(res, 405, { error: 'method_not_allowed' }); return; }
       serveImage(req, res, path);
+      return;
+    }
+
+    // Image upload route (bearer-authed, POST-only)
+    if (path === '/upload') {
+      if (req.method !== 'POST') { json(res, 405, { error: 'method_not_allowed' }); return; }
+      await handleUpload(req, res);
       return;
     }
 

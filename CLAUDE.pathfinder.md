@@ -81,6 +81,30 @@ Run all sidecar tests: `node --test tests/*.test.js`
 Design spec: `docs/superpowers/specs/2026-04-24-nanobanana-local-download-design.md`
 (in the workspace repo).
 
+## Client image upload route (Pathfinder fork, 2026-05-26)
+
+`oauth-server.js` exposes `POST /upload` (bearer-authed, POST-only, raw body).
+Accepts `image/jpeg`, `image/png`, `image/webp`, `image/gif` up to 20 MB.
+Saves to `{IMAGE_OUTPUT_DIR}/uploads/{uuid}{ext}` — inside `IMAGE_OUTPUT_DIR`
+so the path-security clamp in `generate_image` (`ensure_inside_image_root`) accepts
+the returned path without modification.
+
+Client pattern (Claude):
+
+```bash
+source /tmp/pm-op-cache.env
+SERVER_PATH=$(curl -fsS -X POST \
+  -H "Authorization: Bearer $NANOBANANA_MCP_AUTH_TOKEN" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary "@/local/path/to/image.jpg" \
+  "https://nanobanana.mcp.pathfindermarketing.com.au/upload" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['server_path'])")
+# Then pass $SERVER_PATH as input_image_path_1 to generate_image
+```
+
+Uploads are not TTL-tracked — they accumulate in `{IMAGE_OUTPUT_DIR}/uploads/` until
+the container is recreated. Low-volume use; clean up manually if disk becomes a concern.
+
 ## Related
 
 - **Infrastructure:** `PM-Labs/pmin-mcpinfrastructure` (droplet, Caddy, healthcheck, runbooks)
